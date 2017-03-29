@@ -41,11 +41,13 @@ end :: L x x () b
 end = L (const ()) fst
 -- epsilon_X
 
-lift :: (x -> y) -> L x () y ()
-lift f = lift2 f (id :: () -> ())
+-- normally you would have r=()
+lift :: (x -> y) -> L x () y r
+lift f = lift2 f (const ())
 
-liftOp :: (r -> s) -> L () s () r
-liftOp g = lift2 (id :: () -> ()) g
+-- normally you would have x=()
+liftOp :: (r -> s) -> L x s () r
+liftOp g = lift2 (const ()) g
 
 lift2 :: (x -> y) -> (r -> s) -> L x s y r
 lift2 f g = L f (g.snd)
@@ -61,9 +63,30 @@ parComp (L v1 u1) (L v2 u2) = L vboth uboth
 -- Next category
 
 type Rel a = a -> a -> Bool
+idRel :: Eq a => a -> a -> Bool
+idRel = (==)
+(&&.) :: Rel a -> Rel b -> Rel (a, b)
+p &&. q = \(a1, b1) (a2, b2) -> p a1 a2 && q b1 b2
+
                                                -- ~= (x, y -> r) -> Rel sigma
-data OG x s y r sigma = OG (sigma -> L x s y r) ((L () () x s, L y r () ()) -> Rel sigma)
+data OG x s y r sigma = OG (sigma -> L x s y r)
+                           ((L () () x s, L y r () ()) -> Rel sigma)
   -- sigma is a set of strategy profiles and should be the first component in OG
+
+-- Smart constructor
+og :: (sigma -> L x s y r) -> ((x, y->r) -> Rel sigma) -> OG x s y r sigma
+og p b' = OG p b
+  where b (h, k) = b' (convX1 h, convY1 k)
+
+convX1 :: L () () x s -> x
+convX1 h = view h ()
+convX2 :: x -> L () () x s
+convX2 x = L (const x) (const ())
+
+convY1 :: L y r () () -> (y -> r)
+convY1 k = \x -> update k (x,())
+convY2 :: (y -> r) -> L y r () ()
+convY2 f = L (const ()) (f . fst)
 
 
 play :: OG x s y r sigma -> (sigma, x) -> y
@@ -72,14 +95,11 @@ play (OG p _b) (sigma, x) = view (p sigma) x
 coplay :: OG x s y r sigma -> (sigma, (x, r)) -> s
 coplay (OG p _b) (sigma, xr) = update (p sigma) xr
 
-idOG :: OG x s x s ()
-idOG = embed idL
-
 embed :: L x s y r -> OG x s y r ()
 embed l = OG (const l) (const idRel)
 
-idRel :: Eq a => a -> a -> Bool
-idRel = (==)
+idOG :: OG x s x s ()
+idOG = embed idL
 
 compOG :: OG y r z q s2 -> OG x s y r s1 -> OG x s z q (s2, s1)
 compOG (OG p2 b2) (OG p1 b1) = OG p3 b3
@@ -87,18 +107,12 @@ compOG (OG p2 b2) (OG p1 b1) = OG p3 b3
          b3 (h, k) = \(s2,s1) (s2', s1') ->  b1 (h, compose k (p2 s2)) s1 s1' &&
                                              b2 (compose (p1 s1) h, k) s2 s2'
 
-(&&&) :: Rel a -> Rel b -> Rel (a, b)
-p &&& q = \(a1, b1) (a2, b2) -> p a1 a2 && q b1 b2
-
 -- Botta: a game contains more than just a game, but also a sort of
 -- solution to the game.
 
 -- Jules: the solution concept is here tied to Nash equilibrium.
 
-
-
 -- At the top level a "game" is an open game with all parameters set to ()
-
 
 -- What is a "strategy profile"? Classically: a function from states to actions. (Where state often contains the full history.)
 
@@ -111,16 +125,22 @@ Some examples
 X ->   -> Y
 S <- G <- R
 
-
 -}
 
 -- read r as rewards, x as states, y as controls
---   This "lifts a selection function" (the Argmax y r dictionary) to an open game
+--   This "lifts a selection function" (the |Argmax y r| dictionary) to an open game
 player :: Argmax y r => OG x () y r (x->y)
-player = OG (\f -> L f (const ())) b
-  where b (h, k) _ si = si h' `isIn` argmax k'
-          where   h'   = view h ()
-                  k' x = update k (x,())
+player = og lift b
+  where b (h, k) _ si = si h `isIn` argmax k
+
+-- just for type checking
+type Set a = a->Bool
+
+isIn :: a -> Set a -> Bool
+isIn x s = s x
+
+class Argmax x r where
+  argmax :: (x->r) -> Set x
 
 ----------------
 -- Example
@@ -130,7 +150,6 @@ d1 = undefined
 
 d2 :: OG x  () y r (x->y)
 d2 = undefined
-
 -- swapOG :: OG x s s x sigma
 -- swapOG = embed swapL
 
@@ -149,13 +168,6 @@ This theory only supports deterministic games - not with probabilities
 
 --
 
-type Set a = a->Bool -- just for type checking
-
-isIn :: a -> Set a -> Bool
-isIn x s = s x
-
-class Argmax x r where
-  argmax :: (x->r) -> Set x
 
 ----------------
 {-
@@ -213,14 +225,18 @@ util (s:s, a:as) = discounted sums
 beta :: Num r => r
 beta = undefined
 
-liftG :: ((s, a) -> (s, r)) -> OG s real s real (s -> a)
-liftG qu = OG p b
-  where  play pi s        = q (s, pi s)
-         coplay pi (s, r) = u (s, pi s) + beta*r
-         p = undefined play coplay
-         b (s, k) _pi' pi = pi s `isIn` argmax (\a->coplay pi (k (q (s, a))))
-         q = fst . qu
-         u = snd . qu
+
+liftG :: (Argmax a r, Num r) => ((s, a) -> (s, r)) -> OG s r s r (s -> a)
+liftG qu = og p b
+  where  q = fst . qu; u = snd . qu
+         play   pi  s      =  q (s, pi s)
+         coplay pi (s, r)  =  u (s, pi s) + beta*r
+         p pi = L (play pi) (coplay pi)
+         b (s, k) _pi' pi  =  pi s `isIn`
+                              argmax (\a->coplay pi ((id&&&k) (q (s, a))))
+
+(&&&) :: (a->b) -> (a->c) -> a -> (b, c)
+(f &&& g) x = (f x, g x)
 
 {-
 
@@ -228,12 +244,19 @@ Next step is to define a co-inductive open game
 
 -}
 
-liftH :: ((s, a) -> (s, r)) -> OG s real () () [s->a]
+liftH ::  (Argmax a r, Num r) =>
+          ((s, a) -> (s, r)) -> OG s r s r (s->a)
 liftH qu = h
-  where  h = reindex undefined (compOG g h)
+  where  h = reindex dup (compOG g h)
          g = liftG qu
 
-reindex :: (si1 -> si2) -> OG x s y r s1 -> OG x s y r s2
+reindex :: (si2 -> si1) -> OG x s y r si1 -> OG x s y r si2
 reindex f (OG p b) = OG p' b'
-  where  p' = undefined
-         b' = undefined
+  where  p' = p . f
+         b' xf s2 s2' = b xf (f s2) (f s2')
+
+
+-- --------------
+
+dup :: a -> (a, a)
+dup x = (x, x)
