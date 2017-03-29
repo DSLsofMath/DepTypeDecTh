@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 module OpenGames where
 {-
 2017-03-29: Meeting on dependently typed decision theories
@@ -10,6 +11,18 @@ module OpenGames where
 * Philipp Zahn
 
 Before lunch: Jules presenting "Open Games". Patrik coding.
+
+Starting from a category of lenses
+
+A category of pairs of sets
+
+morphism:
+
+  (X, S) --(v,u)-> (Y, R)
+
+  v : X -> Y
+  u : X x R -> S
+
 -}
 
 data L x s y r = L {view :: x -> y, update :: (x,r) -> s}
@@ -90,3 +103,137 @@ p &&& q = \(a1, b1) (a2, b2) -> p a1 a2 && q b1 b2
 -- What is a "strategy profile"? Classically: a function from states to actions. (Where state often contains the full history.)
 
 -- Discussion about relation between finite and infinite horizon decision theories.
+
+{-
+
+Some examples
+
+X ->   -> Y
+S <- G <- R
+
+
+-}
+
+-- read r as rewards, x as states, y as controls
+--   This "lifts a selection function" (the Argmax y r dictionary) to an open game
+player :: Argmax y r => OG x () y r (x->y)
+player = OG (\f -> L f (const ())) b
+  where b (h, k) _ si = si h' `isIn` argmax k'
+          where   h'   = view h ()
+                  k' x = update k (x,())
+
+----------------
+-- Example
+
+d1 :: OG () () x r x
+d1 = undefined
+
+d2 :: OG x  () y r (x->y)
+d2 = undefined
+
+-- swapOG :: OG x s s x sigma
+-- swapOG = embed swapL
+
+utility :: ((x,y)->(r,r)) -> OG (x,y) () (r,r) () ()
+utility = embed . lift
+
+counit :: OG s s () ()  ()
+counit = embed end
+
+{-
+
+This theory only supports deterministic games - not with probabilities
+(except for a few special cases).
+
+-}
+
+--
+
+type Set a = a->Bool -- just for type checking
+
+isIn :: a -> Set a -> Bool
+isIn x s = s x
+
+class Argmax x r where
+  argmax :: (x->r) -> Set x
+
+----------------
+{-
+
+Viktor:
+
+Econometrics - build models from data. Often used by modellers.
+
+Econometric agents - agents who themselves build models from data.
+
+s -> x -> (y, s)  =  s -> F s
+  where  F s = x -> (y, s)
+
+Summary:
+
+There does not seem to be any fundamental difference between
+"econometric agents" and other agents - you just provide them with the
+information they need.
+
+-}
+
+----------------
+
+{-
+
+Jules: tying it all together
+
+S - states
+A - actions
+u : (S, A) -> Real  -- utility function
+q : (S, A) -> S     -- state transition
+
+Combined into
+
+qu : (S, A) -> (S, R) --  (Mealy machine)
+0 < beta < 1
+
+pi : S -> A     -- policy
+
+perhaps also a starting state s0 : S
+
+-}
+
+iter :: Num r => ((s, a) -> (s, r)) -> s -> [a] -> [(s,r)]
+iter qu s0 (a:as) = (s0, r0) : iter qu s1 as
+  where (s1, r0) = qu (s0, a)
+
+{-
+type Stream = []
+util :: ([s], [a]) -> [Rational]
+util (s:s, a:as) = discounted sums
+  -- think of [Rational] as the co-algebraic structure of Reals
+-}
+
+beta :: Num r => r
+beta = undefined
+
+liftG :: ((s, a) -> (s, r)) -> OG s real s real (s -> a)
+liftG qu = OG p b
+  where  play pi s        = q (s, pi s)
+         coplay pi (s, r) = u (s, pi s) + beta*r
+         p = undefined play coplay
+         b (s, k) _pi' pi = pi s `isIn` argmax (\a->coplay pi (k (q (s, a))))
+         q = fst . qu
+         u = snd . qu
+
+{-
+
+Next step is to define a co-inductive open game
+
+-}
+
+liftH :: ((s, a) -> (s, r)) -> OG s real () () [s->a]
+liftH qu = h
+  where  h = reindex undefined (compOG g h)
+         g = liftG qu
+
+reindex :: (si1 -> si2) -> OG x s y r s1 -> OG x s y r s2
+reindex f (OG p b) = OG p' b'
+  where  p' = undefined
+         b' = undefined
