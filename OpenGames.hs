@@ -242,12 +242,15 @@ liftG qu = og p b
 
 Next step is to define a co-inductive open game
 
+Top level input:  s
+Top level output: r
+
 -}
 
 liftH ::  (Argmax a r, Num r) =>
-          ((s, a) -> (s, r)) -> OG s r s r (s->a)
+          ((s, a) -> (s, r)) -> OG s r () () (s->a)
 liftH qu = h
-  where  h = reindex dup (compOG g h)
+  where  h = reindex dup (compOG h g)
          g = liftG qu
 
 reindex :: (si2 -> si1) -> OG x s y r si1 -> OG x s y r si2
