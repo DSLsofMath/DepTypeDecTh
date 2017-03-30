@@ -1,14 +1,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module OpenGames where
 {-
-2017-03-29: Meeting on dependently typed decision theories
-* Nicola Botta     PIK
-* Cezar Ionescu    Oxford
-* Patrik Jansson   Chalmers
-* Pierre Lescanne  ENS-Lyon
-* Jules Hedges     QMUL
-* Viktor Winschel
-* Philipp Zahn
+2017-03-29: Meeting on dependently typed decision theories:
+
+* Nicola Botta     PIK            https://www.pik-potsdam.de/members/botta
+* Cezar Ionescu    Oxford         https://www.conted.ox.ac.uk/profiles/cezar-ionescu
+* Patrik Jansson   Chalmers       https://www.chalmers.se/en/Staff/Pages/patrik-jansson.aspx
+* Pierre Lescanne  ENS-Lyon       https://perso.ens-lyon.fr/pierre.lescanne/
+* Jules Hedges     Oxford         https://www.cs.ox.ac.uk/people/julian.hedges/
+* Viktor Winschel  Oicos.org      https://www.vikwin.de/
+* Philipp Zahn     U. St. Gallen  http://www.philipp-zahn.com/
 
 Before lunch: Jules presenting "Open Games". Patrik coding.
 
