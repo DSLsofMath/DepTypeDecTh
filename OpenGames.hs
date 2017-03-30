@@ -12,9 +12,9 @@ module OpenGames where
 
 Before lunch: Jules presenting "Open Games". Patrik coding.
 
-Starting from a category of lenses
+Starting from a category of lenses ("outlaw lenses";-).
 
-A category of pairs of sets
+A category of pairs of sets (the objects are pairs of sets).
 
 morphism:
 
@@ -39,7 +39,7 @@ example = L fst (\((_,x2),x') -> (x',x2))
 
 end :: L x x () b
 end = L (const ()) fst
--- epsilon_X
+-- traditionally called epsilon_x anb b=()
 
 -- normally you would have r=()
 lift :: (x -> y) -> L x () y r
@@ -61,6 +61,7 @@ parComp (L v1 u1) (L v2 u2) = L vboth uboth
          uboth ((x1, x2), (r1, r2)) = (u1 (x1, r1), u2 (x2, r2))
 
 -- Next category
+-- Same objects: pairs of sets
 
 type Rel a = a -> a -> Bool
 idRel :: Eq a => a -> a -> Bool
@@ -68,8 +69,12 @@ idRel = (==)
 (&&.) :: Rel a -> Rel b -> Rel (a, b)
 p &&. q = \(a1, b1) (a2, b2) -> p a1 a2 && q b1 b2
 
-                                               -- ~= (x, y -> r) -> Rel sigma
+-- Arrows from (x,s) to (y,r) have type Sigma Set (OG x s y r)
+--   where Sigma X Y is the dependent sum type.
+
+
 data OG x s y r sigma = OG (sigma -> L x s y r)
+                           -- ~= (x, y -> r) -> Rel sigma
                            ((L () () x s, L y r () ()) -> Rel sigma)
   -- sigma is a set of strategy profiles and should be the first component in OG
 
@@ -79,15 +84,14 @@ og p b' = OG p b
   where b (h, k) = b' (convX1 h, convY1 k)
 
 convX1 :: L () () x s -> x
-convX1 h = view h ()
 convX2 :: x -> L () () x s
+convX1 h = view h ()
 convX2 x = L (const x) (const ())
 
 convY1 :: L y r () () -> (y -> r)
-convY1 k = \x -> update k (x,())
 convY2 :: (y -> r) -> L y r () ()
+convY1 k = \x -> update k (x,())
 convY2 f = L (const ()) (f . fst)
-
 
 play :: OG x s y r sigma -> (sigma, x) -> y
 play (OG p _b) (sigma, x) = view (p sigma) x
@@ -107,18 +111,23 @@ compOG (OG p2 b2) (OG p1 b1) = OG p3 b3
          b3 (h, k) = \(s2,s1) (s2', s1') ->  b1 (h, compose k (p2 s2)) s1 s1' &&
                                              b2 (compose (p1 s1) h, k) s2 s2'
 
--- Botta: a game contains more than just a game, but also a sort of
--- solution to the game.
-
--- Jules: the solution concept is here tied to Nash equilibrium.
-
--- At the top level a "game" is an open game with all parameters set to ()
-
--- What is a "strategy profile"? Classically: a function from states to actions. (Where state often contains the full history.)
-
--- Discussion about relation between finite and infinite horizon decision theories.
+-- swapOG :: OG x s s x sigma
+-- swapOG = embed swapL
 
 {-
+
+Botta: a game contains more than just a game, but also a sort of
+solution to the game.
+
+Jules: the solution concept is here tied to Nash equilibrium.
+
+At the top level a "game" is an open game with all parameters set to ()
+
+What is a "strategy profile"? Classically: a function from states
+to actions. (Where state often contains the full history.)
+
+Discussion about relation between finite and infinite horizon
+decision theories.
 
 Some examples
 
@@ -127,31 +136,24 @@ S <- G <- R
 
 -}
 
--- read r as rewards, x as states, y as controls
---   This "lifts a selection function" (the |Argmax y r| dictionary) to an open game
+-- This "lifts a selection function" (the |Argmax y r| dictionary) to
+-- an open game. Read r as rewards, x as states, y as controls
 player :: Argmax y r => OG x () y r (x->y)
 player = og lift b
   where b (h, k) _ si = si h `isIn` argmax k
 
--- just for type checking
-type Set a = a->Bool
-
-isIn :: a -> Set a -> Bool
-isIn x s = s x
-
+-- Let's generalise from actual "argmax" to something of that type.
 class Argmax x r where
   argmax :: (x->r) -> Set x
 
 ----------------
--- Example
+-- Example (unfinished)
 
-d1 :: OG () () x r x
-d1 = undefined
+-- d1 :: OG () () x r x
+-- d1 =
 
-d2 :: OG x  () y r (x->y)
-d2 = undefined
--- swapOG :: OG x s s x sigma
--- swapOG = embed swapL
+-- d2 :: OG x  () y r (x->y)
+-- d2 =
 
 utility :: ((x,y)->(r,r)) -> OG (x,y) () (r,r) () ()
 utility = embed . lift
@@ -161,12 +163,10 @@ counit = embed end
 
 {-
 
-This theory only supports deterministic games - not with probabilities
-(except for a few special cases).
+Jules: This theory only supports deterministic games - not with
+probabilities (except for a few special cases).
 
 -}
-
---
 
 
 ----------------
@@ -222,11 +222,10 @@ util (s:s, a:as) = discounted sums
   -- think of [Rational] as the co-algebraic structure of Reals
 -}
 
-beta :: Num r => r
-beta = undefined
+beta :: Fractional r => r
+beta = 9/10
 
-
-liftG :: (Argmax a r, Num r) => ((s, a) -> (s, r)) -> OG s r s r (s -> a)
+liftG :: (Argmax a r, Fractional r) => ((s, a) -> (s, r)) -> OG s r s r (s -> a)
 liftG qu = og p b
   where  q = fst . qu; u = snd . qu
          play   pi  s      =  q (s, pi s)
@@ -234,9 +233,6 @@ liftG qu = og p b
          p pi = L (play pi) (coplay pi)
          b (s, k) _pi' pi  =  pi s `isIn`
                               argmax (\a->coplay pi ((id&&&k) (q (s, a))))
-
-(&&&) :: (a->b) -> (a->c) -> a -> (b, c)
-(f &&& g) x = (f x, g x)
 
 {-
 
@@ -247,7 +243,7 @@ Top level output: r
 
 -}
 
-liftH ::  (Argmax a r, Num r) =>
+liftH ::  (Argmax a r, Fractional r) =>
           ((s, a) -> (s, r)) -> OG s r () () (s->a)
 liftH qu = h
   where  h = reindex dup (compOG h g)
@@ -260,6 +256,16 @@ reindex f (OG p b) = OG p' b'
 
 
 -- --------------
+-- Utlities
+
+(&&&) :: (a->b) -> (a->c) -> a -> (b, c)
+(f &&& g) x = (f x, g x)
 
 dup :: a -> (a, a)
 dup x = (x, x)
+
+-- just for type checking
+type Set a = a->Bool
+
+isIn :: a -> Set a -> Bool
+isIn x s = s x
